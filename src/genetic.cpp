@@ -12,6 +12,7 @@
 #include <program.h>
 #include <random>
 #include <stack>
+#include <omp.h>
 namespace genetic {
 
 /**
@@ -32,43 +33,35 @@ void tournament_kernel(const std::vector<program> &progs, int *win_indices,
                        const int seed, const int n_progs, const int n_tours,
                        const int tour_size, const int criterion,
                        const float parsimony) {
-  PhiloxEngine gen(seed);
-  uniform_int_distribution_custom<int> rng(0, n_progs - 1);
+  #pragma omp parallel
+  {
+    int thread_id = omp_get_thread_num();
+    PhiloxEngine thread_gen(seed + thread_id);
 
-  for (auto idx = 0; idx < n_tours; ++idx) {
-    int r;
-    r = rng(gen);
+    #pragma omp for
+    for (auto idx = 0; idx < n_tours; ++idx) {
+      uniform_int_distribution_custom<int> thread_rng(0, n_progs-1);
+      int r = thread_rng(thread_gen);
+      // Define optima values
+      int opt = r % n_progs;
+      float opt_penalty = parsimony * progs[opt].len * (2 * criterion - 1);
+      float opt_score = progs[opt].raw_fitness_ - opt_penalty;
 
-    // Define optima values
-    int opt = r % n_progs;
-    float opt_penalty = parsimony * progs[opt].len * (2 * criterion - 1);
-    float opt_score = progs[opt].raw_fitness_ - opt_penalty;
+      for (int s = 1; s < tour_size; ++s) {
+        r = thread_rng(thread_gen);
+        int curr = r % n_progs;
+        float curr_penalty = parsimony * progs[curr].len * (2 * criterion - 1);
+        float curr_score = progs[curr].raw_fitness_ - curr_penalty;
 
-    for (int s = 1; s < tour_size; ++s) {
-      r = rng(gen);
-      int curr = r % n_progs;
-      float curr_penalty = parsimony * progs[curr].len * (2 * criterion - 1);
-      float curr_score = progs[curr].raw_fitness_ - curr_penalty;
-
-      if (criterion) {
-        // max score
-        if (opt_score < curr_score) {
-          opt = curr;
-          opt_penalty = curr_penalty;
-          opt_score = curr_score;
-        }
-      } else {
-        // min score
-        if (opt_score > curr_score) {
+        if ((criterion && (opt_score < curr_score)) || (!criterion && (opt_score > curr_score))) {
           opt = curr;
           opt_penalty = curr_penalty;
           opt_score = curr_score;
         }
       }
+      // Set win index
+      win_indices[idx] = opt;
     }
-
-    // Set win index
-    win_indices[idx] = opt;
   }
 }
 
@@ -102,6 +95,7 @@ void cpp_evolve(const std::vector<program> &h_oldprogs,
 
   if (generation == 1) {
     // Build random programs for the first generation
+    #pragma omp parallel for
     for (auto i = 0; i < n_progs; ++i) {
       build_program(h_nextprogs[i], params, h_gen);
     }
@@ -115,12 +109,14 @@ void cpp_evolve(const std::vector<program> &h_oldprogs,
     mut_probs[3] = params.p_point_mutation;
     std::partial_sum(mut_probs, mut_probs + 4, mut_probs);
 
+    int crossover_count = 0;
+    #pragma omp parallel for reduction(+:crossover_count)
     for (auto i = 0; i < n_progs; ++i) {
       float prob = dist_U(h_gen);
 
       if (prob < mut_probs[0]) {
         h_nextprogs[i].mut_type = mutation_t::crossover;
-        n_tours++;
+        crossover_count++; // each thread adds own count
       } else if (prob < mut_probs[1]) {
         h_nextprogs[i].mut_type = mutation_t::subtree;
       } else if (prob < mut_probs[2]) {
@@ -131,6 +127,7 @@ void cpp_evolve(const std::vector<program> &h_oldprogs,
         h_nextprogs[i].mut_type = mutation_t::reproduce;
       }
     }
+    n_tours += crossover_count; // update safely outside parallel
 
     // Run tournaments
     std::vector<int> d_win_indices(n_tours);
@@ -149,13 +146,20 @@ void cpp_evolve(const std::vector<program> &h_oldprogs,
     // Perform host mutations
 
     auto donor_pos = n_progs;
+
+    #pragma omp parallel for schedule(dynamic)
     for (auto pos = 0; pos < n_progs; ++pos) {
       auto parent_index = d_win_indices[pos];
 
       if (h_nextprogs[pos].mut_type == mutation_t::crossover) {
         // Get secondary index
-        auto donor_index = d_win_indices[donor_pos];
-        donor_pos++;
+        int donor_index;
+
+        #pragma omp critical
+        {
+          donor_index = d_win_indices[donor_pos];
+          donor_pos++;
+        }
         crossover(h_oldprogs[parent_index], h_oldprogs[donor_index],
                   h_nextprogs[pos], params, h_gen);
       } else if (h_nextprogs[pos].mut_type == mutation_t::subtree) {
@@ -414,7 +418,6 @@ void symFit(const float *input, const float *labels,
     // Evolve current generation
     cpp_evolve(h_currprogs, h_nextprogs, n_rows, input, labels, sample_weights,
                params, (gen + 1), init_seed);
-
     // Update epochs
     ++params.num_epochs;
 
@@ -433,6 +436,7 @@ void symFit(const float *input, const float *labels,
     h_fitness[0] = h_currprogs[0].raw_fitness_;
     auto opt_fit = h_fitness[0];
 
+    // #pragma omp parallel for reduction(min:opt_fit) if (crit == 0) reduction(max:opt_fit) if (crit == 1)
     for (auto i = 1; i < params.population_size; ++i) {
       h_fitness[i] = h_currprogs[i].raw_fitness_;
 
