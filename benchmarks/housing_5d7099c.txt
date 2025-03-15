@@ -1,0 +1,19 @@
+
+===== Symbolic Regression Benchmark =====
+
+Loading dataset...
+Dataset dimensions: 20640 samples x 8 features
+Training symbolic regressor with 512 population size and 16 generations
+Best program 1 details:
+- Length: 33 nodes
+- Depth: 16
+- Raw fitness: 0.842993
+- Test MSE: 0.814299
+- Program: ( add( , log( , exp( , cos( , cos( , log( , X2) ) ) ) ) , log( , abs( , fdim( , abs( , X0) , abs( , sin( , abs( , log( , add( , log( , exp( , exp( , log( , X3) ) ) ) , log( , abs( , fdim( , abs( , X0) , fdim( , log( , exp( , abs( , X0) ) ) , X1) ) ) ) ) ) ) ) ) ) ) ) ) )
+Best program 2 details:
+- Length: 44 nodes
+- Depth: 17
+- Raw fitness: 0.849205
+- Test MSE: 0.821065
+- Program: ( add( , log( , exp( , cos( , cos( , log( , add( , fdim( , abs( , X0) , fdim( , sin( , abs( , log( , add( , abs( , fdim( , abs( , X0) , fdim( , X0, X1) ) ) , log( , abs( , fdim( , abs( , X0) , fdim( , X0, X1) ) ) ) ) ) ) ) , X1) ) , log( , exp( , log( , cos( , X0) ) ) ) ) ) ) ) ) ) , log( , abs( , fdim( , abs( , X0) , fdim( , X0, X1) ) ) ) ) )
+Time(Symbolic Regression (End-to-End)) = 3.016801393 sec
