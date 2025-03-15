@@ -19,44 +19,58 @@ namespace genetic {
  * is stored in column major format.
  */
 template <int MaxSize = MAX_STACK_SIZE>
-void execute_kernel(const program_t d_progs, const float *__restrict__ data, float *__restrict__ y_pred,
-                    const uint64_t n_rows, const uint64_t n_progs) {
-  #pragma omp parallel
-  {
-    #pragma omp single nowait
-    {
-    for (uint64_t pid = 0; pid < n_progs; ++pid) {
-        #pragma omp task firstprivate(pid)
-        {
-          program_t curr_prog = d_progs + pid;
-          for (uint64_t row_id = 0; row_id < n_rows; ++row_id) {
-            stack<float, MaxSize> eval_stack;
-            node *__restrict__ curr_node = curr_prog->nodes + curr_prog->len - 1;
-            const node *__restrict__ base = curr_prog->nodes;
-            float in[2] = {0.0f, 0.0f};
-
-            while (curr_node >= base) {
-              if (curr_node != base) {
-                __builtin_prefetch(curr_node - 1, 0, 1);
-              }
-
-              if (__builtin_expect(detail::is_nonterminal(curr_node->t), 1)) {
-                const int ar = detail::arity(curr_node->t);
-                in[0] = eval_stack.pop(); // Min arity of function is 1
-                if (ar > 1)
-                  in[1] = eval_stack.pop();
-              }
-              const float res = detail::evaluate_node(*curr_node, data, n_rows, row_id, in);
-              eval_stack.push(res);
-              --curr_node;
-            }
-
-            // Outputs stored in col-major format
-            y_pred[pid * n_rows + row_id] = eval_stack.pop();
+void execute_kernel(const program_t d_progs, const float * __restrict__ data,
+                               float * __restrict__ y_pred,
+                               const uint64_t n_rows, const uint64_t n_progs) {
+  #pragma omp parallel for schedule(static)
+  for (uint64_t pid = 0; pid < n_progs; ++pid) {
+    program_t curr_prog = d_progs + pid;
+    const int n_nodes = curr_prog->len;
+    float * __restrict__ stack = new float[n_rows * MaxSize];
+    int sp = 0;
+    
+    for (int idx = n_nodes - 1; idx >= 0; --idx) {
+      const node &n = curr_prog->nodes[idx];
+      if (__builtin_expect(detail::is_nonterminal(n.t), 1)) {
+        const int ar = detail::arity(n.t);
+        sp -= ar;
+        if (ar == 1) {
+          #pragma omp simd
+          for (uint64_t r = 0; r < n_rows; ++r) {
+            float op0 = stack[r * MaxSize + sp];
+            stack[r * MaxSize + sp] = detail::evaluate_node(n, data, n_rows, r, &op0);
           }
+          sp += 1;
+        } else if (ar == 2) {
+          #pragma omp simd
+          for (uint64_t r = 0; r < n_rows; ++r) {
+            float op0 = stack[r * MaxSize + sp + 1];
+            float op1 = stack[r * MaxSize + sp + 0];
+            float in[2] = { op0, op1 };
+            stack[r * MaxSize + sp] = detail::evaluate_node(n, data, n_rows, r, in);
+          }
+          sp += 1;
+        } else {
+          #pragma omp simd
+          for (uint64_t r = 0; r < n_rows; ++r) {
+            float in[2] = {0.0f, 0.0f};
+            stack[r * MaxSize + sp] = detail::evaluate_node(n, data, n_rows, r, in);
+          }
+          sp += 1;
         }
+      } else {
+        #pragma omp simd
+        for (uint64_t r = 0; r < n_rows; ++r) {
+          stack[r * MaxSize + sp] = detail::evaluate_node(n, data, n_rows, r, nullptr);
+        }
+        sp += 1;
       }
     }
+    #pragma omp simd
+    for (uint64_t r = 0; r < n_rows; ++r) {
+      y_pred[pid * n_rows + r] = stack[r * MaxSize + sp - 1];
+    }
+    delete[] stack;
   }
 }
 
