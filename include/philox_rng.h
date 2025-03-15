@@ -45,7 +45,11 @@ void philox_seed_with_key(uint32_t seed, uint32_t key0, uint32_t key1);
 void philox_reset(void);
 void philox_skip(uint64_t count);
 void philox_next4(uint32_t out[4]);
-uint32_t philox_random_uint32(void);
+inline uint32_t philox_random_uint32(void) {
+    uint32_t out[4];
+    philox_next4(out);
+    return out[0];
+}
 uint64_t philox_random_uint64(void);
 double philox_random_double(void);
 float philox_random_float(void);
