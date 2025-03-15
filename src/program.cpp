@@ -19,32 +19,31 @@ namespace genetic {
  * is stored in column major format.
  */
 template <int MaxSize = MAX_STACK_SIZE>
-void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
+void execute_kernel(const program_t d_progs, const float *__restrict__ data, float *__restrict__ y_pred,
                     const uint64_t n_rows, const uint64_t n_progs) {
-  #pragma omp parallel for schedule(dynamic)
+  #pragma omp parallel for collapse(2) schedule(static) 
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
-    program_t curr_p = d_progs + pid; // Current program
-
-    #pragma omp parallel for schedule(static) if(n_rows > 1000)
     for (uint64_t row_id = 0; row_id < n_rows; ++row_id) {
-
       stack<float, MaxSize> eval_stack;
-      const int end = curr_p->len - 1;
-      node *curr_node = curr_p->nodes + end;
-
-      float res = 0.0f;
+      const program_t curr_prog = d_progs + pid;
+      node *__restrict__ curr_node = curr_prog->nodes + curr_prog->len - 1;
+      const node *__restrict__ base = curr_prog->nodes;
       float in[2] = {0.0f, 0.0f};
 
-      for (int i = end; i >= 0; --i) {
-        if (detail::is_nonterminal(curr_node->t)) {
-          int ar = detail::arity(curr_node->t);
+      while (curr_node >= base) {
+        if (curr_node != base) {
+          __builtin_prefetch(curr_node - 1, 0, 1);
+        }
+
+        if (__builtin_expect(detail::is_nonterminal(curr_node->t), 1)) {
+          const int ar = detail::arity(curr_node->t);
           in[0] = eval_stack.pop(); // Min arity of function is 1
           if (ar > 1)
             in[1] = eval_stack.pop();
         }
-        res = detail::evaluate_node(*curr_node, data, n_rows, row_id, in);
+        const float res = detail::evaluate_node(*curr_node, data, n_rows, row_id, in);
         eval_stack.push(res);
-        curr_node--;
+        --curr_node;
       }
 
       // Outputs stored in col-major format
