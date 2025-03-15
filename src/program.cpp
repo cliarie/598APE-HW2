@@ -29,8 +29,6 @@ void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
     for (uint64_t row_id = 0; row_id < n_rows; ++row_id) {
 
       stack<float, MaxSize> eval_stack;
-      program_t curr_p = d_progs + pid; // Current program
-
       const int end = curr_p->len - 1;
       node *curr_node = curr_p->nodes + end;
 
@@ -83,24 +81,52 @@ program &program::operator=(const program &src) {
   return *this;
 }
 
+template <metric_t metric>
+constexpr void compute_metric_impl(int n_rows, int n_progs, const float *y,
+                                  const float *y_pred, const float *w, float *score) {
+  if constexpr (metric == metric_t::pearson){
+    weightedPearson(n_rows, n_progs, y, y_pred, w, score);
+  } else if constexpr (metric == metric_t::spearman) {
+    weightedSpearman(n_rows, n_progs, y, y_pred, w, score);
+  } else if constexpr (metric == metric_t::mae) {
+    meanAbsoluteError(n_rows, n_progs, y, y_pred, w, score);
+  } else if constexpr (metric == metric_t::mse) {
+    meanSquareError(n_rows, n_progs, y, y_pred, w, score);
+  } else if constexpr (metric == metric_t::rmse) {
+    rootMeanSquareError(n_rows, n_progs, y, y_pred, w, score);
+  } else if constexpr (metric == metric_t::logloss) {
+    logLoss(n_rows, n_progs, y, y_pred, w, score);
+  } else {
+    // This should not be reachable
+  }
+}
+
 void compute_metric(int n_rows, int n_progs, const float *y,
                     const float *y_pred, const float *w, float *score,
                     const param &params) {
   // Call appropriate metric function based on metric defined in params
-  if (params.metric == metric_t::pearson) {
-    weightedPearson(n_rows, n_progs, y, y_pred, w, score);
-  } else if (params.metric == metric_t::spearman) {
-    weightedSpearman(n_rows, n_progs, y, y_pred, w, score);
-  } else if (params.metric == metric_t::mae) {
-    meanAbsoluteError(n_rows, n_progs, y, y_pred, w, score);
-  } else if (params.metric == metric_t::mse) {
-    meanSquareError(n_rows, n_progs, y, y_pred, w, score);
-  } else if (params.metric == metric_t::rmse) {
-    rootMeanSquareError(n_rows, n_progs, y, y_pred, w, score);
-  } else if (params.metric == metric_t::logloss) {
-    logLoss(n_rows, n_progs, y, y_pred, w, score);
-  } else {
-    // This should not be reachable
+  switch (params.metric) {
+    case metric_t::pearson:
+      compute_metric_impl<metric_t::pearson>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    case metric_t::spearman:
+      compute_metric_impl<metric_t::spearman>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    case metric_t::mae:
+      compute_metric_impl<metric_t::mae>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    case metric_t::mse:
+      compute_metric_impl<metric_t::mse>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    case metric_t::rmse:
+      compute_metric_impl<metric_t::rmse>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    case metric_t::logloss:
+      compute_metric_impl<metric_t::logloss>(n_rows, n_progs, y, y_pred, w, score);
+      break;
+    default:
+      // This should not be reachable
+      break;
   }
 }
 
