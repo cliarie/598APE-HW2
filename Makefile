@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -std=c++23 -fopenmp -O3 -march=native -Wall -Wextra -I include -I. -g -fno-omit-frame-pointer
+CXXFLAGS := -std=c++23 -funroll-loops -fopenmp -O3 -march=native -Wall -Wextra -I include -I. -g -fno-omit-frame-pointer
 
 # Directories
 SRC_DIR := src
