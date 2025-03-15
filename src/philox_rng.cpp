@@ -118,12 +118,6 @@ void philox_next4(uint32_t out[4]) {
     }
 }
 
-/* Generate a random 32-bit unsigned integer */
-uint32_t philox_random_uint32(void) {
-    uint32_t out[4];
-    philox_next4(out);
-    return out[0];
-}
 
 /* Generate a random 64-bit unsigned integer */
 uint64_t philox_random_uint64(void) {

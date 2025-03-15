@@ -10,13 +10,13 @@ namespace detail {
 
 static constexpr float MIN_VAL = 0.001f;
 
-inline bool is_terminal(node::type t) {
+inline __attribute__((always_inline)) bool is_terminal(node::type t) {
   return t == node::type::variable || t == node::type::constant;
 }
 
-inline bool is_nonterminal(node::type t) { return !is_terminal(t); }
+inline __attribute__((always_inline)) bool is_nonterminal(node::type t) { return !is_terminal(t); }
 
-inline int arity(node::type t) {
+inline __attribute__((always_inline)) int arity(node::type t) {
   if (node::type::unary_begin <= t && t <= node::type::unary_end) {
     return 1;
   }
@@ -27,7 +27,7 @@ inline int arity(node::type t) {
 }
 
 // `data` assumed to be stored in col-major format
-inline float evaluate_node(const node &n, const float *data, const uint64_t stride,
+inline __attribute__((always_inline)) float evaluate_node(const node &n, const float *data, const uint64_t stride,
                     const uint64_t idx, const float *in) {
   if (n.t == node::type::constant) {
     return n.u.val;
