@@ -21,19 +21,23 @@ namespace genetic {
 template <int MaxSize = MAX_STACK_SIZE>
 void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
                     const uint64_t n_rows, const uint64_t n_progs) {
+  #pragma omp parallel for schedule(dynamic)
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
+    program_t curr_p = d_progs + pid; // Current program
+
+    #pragma omp parallel for schedule(static) if(n_rows > 1000)
     for (uint64_t row_id = 0; row_id < n_rows; ++row_id) {
 
       stack<float, MaxSize> eval_stack;
       program_t curr_p = d_progs + pid; // Current program
 
-      int end = curr_p->len - 1;
+      const int end = curr_p->len - 1;
       node *curr_node = curr_p->nodes + end;
 
       float res = 0.0f;
       float in[2] = {0.0f, 0.0f};
 
-      while (end >= 0) {
+      for (int i = end; i >= 0; --i) {
         if (detail::is_nonterminal(curr_node->t)) {
           int ar = detail::arity(curr_node->t);
           in[0] = eval_stack.pop(); // Min arity of function is 1
@@ -43,7 +47,6 @@ void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
         res = detail::evaluate_node(*curr_node, data, n_rows, row_id, in);
         eval_stack.push(res);
         curr_node--;
-        end--;
       }
 
       // Outputs stored in col-major format
