@@ -77,6 +77,29 @@ This project contains three input datasets for you to optimize. All 3 are standa
 ./genetic_benchmark housing
 ```
 
+## Performance Benchmarking
+Use the included script ot run all benchmarks with perf recording and Flamegraph generation
+
+``` bash
+sudo ./perf_benchmark.sh
+```
+
+This runs all datasets (diabetes, cancer, housing), and saves human-readable output to benchmarks/<dataset>_<commit>.txt, saves flamegraph SVG to flamegraphs/<dataset>_<commit>.svg
+
+Flamegraphs can be opened with any modern browser:
+
+zen flamegraphs/diabetes_<commit>.svg
+
+
+## Optimization Tracking 
+
+Each optimization step is committed with a unique Git has, and benchmark/flamegraph results are named accordingly. 
+
+To compare performance:
+1. Check the commit hash via git log
+2. Inspect corresponding files in benchmarks/ and flamegraphs/
+3. Profile regressions or improvements visually and numerically
+
 ## Code Overview
 
 There are multiple core functions
@@ -103,8 +126,13 @@ As the name suggests, we compute the loss/accuracy values according to the metri
 
 ## Docker
 
-For ease of use and installation, we provide a docker image capable of running and building code here. The source docker file is in /docker (which is essentially a list of commands to build an OS state from scratch). It contains the dependent compilers, and some other nice things.
+Build image
+``` bash
+docker build -t 598ape-hw2
+```
 
-You can build this yourself manually by running `cd docker && docker build -t <myusername>/598ape`. Alternatively we have pushed a pre-built version to `wsmoses/598ape` on Dockerhub.
+Run container
+```
+docker run --rm -it 598ape-hw2
+```
 
-You can then use the Docker container to build and run your code. If you run `./dockerrun.sh` you will enter an interactive bash session with all the packages from docker installed (that script by default uses `wsmoses/598ape`, feel free to replace it with whatever location you like if you built from scratch). The current directory (aka this folder) is mounted within `/host`. Any files you create on your personal machine will be available there, and anything you make in the container in that folder will be available on your personal machine.
